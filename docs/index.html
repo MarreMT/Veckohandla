@@ -256,6 +256,34 @@ const P_RAW=[
 ];
 const PRODUCTS={};
 P_RAW.forEach(r=>PRODUCTS[r[0]]={id:r[0],name:r[1],cat:r[2],stor:r[3],pack:r[4],k:r[5],p:r[6],c:r[7],f:r[8],base:r[9]});
+/* Hur mängden visas: antal (med gram per styck), volym i dl, annars vikt */
+/* Hur mängden visas: antal (gram per styck, ental, flertal), volym, annars vikt */
+const COUNT={agg:[55,'ägg','ägg'],tortilla:[40,'bröd','bröd'],banan:[120,'banan','bananer'],paprika:[160,'paprika','paprikor'],
+ lok:[110,'lök','lökar'],gurka:[350,'gurka','gurkor'],vitlok:[4,'klyfta','klyftor'],morot:[80,'morot','morötter'],
+ potatis:[90,'potatis','potatisar'],sotpotatis:[250,'sötpotatis','sötpotatisar'],tomat:[100,'tomat','tomater']};
+const VOL=new Set(['mjolk','gradde','vispgradde','olja','soja','kokos']);
+function volText(g){
+  if(g>=1000)return n1(Math.round(g/100)/10)+' l';
+  if(g>=100)return n1(Math.round(g/10)/10)+' dl';
+  return n0(Math.round(g/5)*5)+' ml';
+}
+function wtText(g){return g>=1000?n1(Math.round(g/100)/10)+' kg':n0(Math.round(g/10)*10)+' g'}
+function amountText(pid,g){
+  const c=COUNT[pid];
+  if(c){const n=Math.max(1,Math.round(g/c[0]));return n+' '+(n===1?c[1]:c[2])}
+  return VOL.has(pid)?volText(g):wtText(g);
+}
+function packText(pid,g){
+  const c=COUNT[pid];
+  if(c){const n=Math.max(1,Math.round(g/c[0]));return n+' '+(n===1?c[1]:c[2])}
+  return VOL.has(pid)?volText(g):(g>=1000?n1(Math.round(g/100)/10)+' kg':n0(g)+' g');
+}
+function packText(pid,g){
+  const c=COUNT[pid];
+  if(c)return n0(Math.max(1,Math.round(g/c[0])))+' '+c[1];
+  if(VOL.has(pid))return g>=1000?n1(g/1000)+' l':n0(g)+' ml';
+  return g>=1000?n1(Math.round(g/100)/10)+' kg':n0(g)+' g';
+}
 
 const PRICE={};
 function priceOf(pid,sid){
@@ -282,7 +310,7 @@ const OFF0=[
 ['lidl','banan','price',20,0,0,3],['lidl','bar','price',25,0,0,4],['lidl','notter','price',22,0,0,2],
 ['lidl','havre','price',15,0,0,3],['lidl','olja','price',49,0,0,2]
 ];
-const DEFAULT_OFFERS=OFF0.map((o,i)=>({id:'d'+i,store:o[0],pid:o[1],kind:o[2],price:o[3],buy:o[4],pay:o[5],max:o[6]}));
+const DEFAULT_OFFERS=OFF0.map((o,i)=>({id:'d'+i,store:o[0],pid:o[1],kind:o[2],price:o[3],buy:o[4],pay:o[5],max:o[6],reg:0,regSrc:'',packG:PRODUCTS[o[1]]?PRODUCTS[o[1]].pack:0,qty:'',heading:(PRODUCTS[o[1]]?PRODUCTS[o[1]].name:o[1])+' (exempel)',until:''}));
 
 /* Basrecept. Mängder är gram per standardportion. Roller: P protein, C kolhydrat, V grönsak, F fett/övrigt */
 const R0=[
@@ -423,6 +451,108 @@ function guessMeal(it){
   return /frukost|gröt|smoothie/.test(t)?'frukost':'middag';
 }
 
+/* ================= Kampanjrecept: appen sätter ihop recept av veckans erbjudanden ================= */
+const PNOUN={kyckling:'Kyckling',flaskfile:'Fläskfilé',tofu:'Tofu',rakor:'Räkor',notfars:'Köttfärs',blandfars:'Blandfärs',kalkonfars:'Kalkonfärs',lax:'Lax',torsk:'Torsk',kikartor:'Kikärtor',bonor:'Svarta bönor',linser:'Röda linser',agg:'Ägg',kvarg:'Kvarg',grekyog:'Grekisk yoghurt'};
+const PLOW={};Object.keys(PNOUN).forEach(k=>PLOW[k]=PNOUN[k].charAt(0).toLowerCase()+PNOUN[k].slice(1));
+const PWOK={kyckling:'Kycklingwok',flaskfile:'Fläskwok',tofu:'Tofuwok',rakor:'Räkwok'};
+const PSAUCE={notfars:'köttfärssås',blandfars:'köttfärssås',kalkonfars:'kalkonfärssås',linser:'linssås',bonor:'bönsås'};
+const CN={ris:'ris',pasta:'pasta',fkpasta:'fullkornspasta',potatis:'potatis',sotpotatis:'sötpotatis',tortilla:'tortilla',couscous:'couscous',havre:'havregryn',banan:'banan',brod:'bröd'};
+const VN={wok:'wokgrönsaker',broccoli:'broccoli',paprika:'paprika',spenat:'spenat',champinjon:'champinjoner',morot:'morötter',bar:'bär'};
+const PG={kyckling:150,flaskfile:150,tofu:150,rakor:150,notfars:120,blandfars:120,kalkonfars:130,lax:140,torsk:170,kikartor:180,bonor:150,linser:70,agg:165,kvarg:250,grekyog:250};
+const CG={ris:75,pasta:85,fkpasta:85,potatis:250,sotpotatis:250,tortilla:90,couscous:70,havre:60,banan:100,brod:60};
+const VG={wok:150,broccoli:120,spenat:80,paprika:80,champinjon:60,morot:100,bar:100};
+const PREP={
+  kyckling:'Skär kycklingen i bitar och stek i olja tills den är genomstekt.',
+  flaskfile:'Skiva fläskfilén och stek den i olja tills den är genomstekt.',
+  tofu:'Tärna tofun, krama ut vätskan och stek den gyllene i olja.',
+  rakor:'Tina räkorna och stek dem hastigt, bara någon minut.',
+  notfars:'Stek köttfärsen smulig i olja och salta.',
+  blandfars:'Stek färsen smulig i olja och salta.',
+  kalkonfars:'Stek kalkonfärsen smulig i olja och salta.',
+  lax:'Salta och peppra laxen.',torsk:'Salta och peppra torsken.',
+  kikartor:'Skölj kikärtorna och låt dem rinna av.',bonor:'Skölj bönorna och låt dem rinna av.',
+  linser:'Skölj linserna.',agg:'Vispa äggen med salt och peppar.',kvarg:'',grekyog:''
+};
+function carbStep(c,oven){
+  if(c==='ris')return 'Koka riset enligt förpackningen.';
+  if(c==='pasta'||c==='fkpasta')return 'Koka pastan enligt förpackningen.';
+  if(c==='couscous')return 'Häll kokande vatten över couscousen och låt svälla under lock i 5 minuter.';
+  if(c==='potatis'||c==='sotpotatis')return oven?`Skär ${CN[c]}n i klyftor, ringla över olja och salt och rosta i 225 grader i 25 till 30 minuter.`:`Koka ${CN[c]}n mjuk i saltat vatten.`;
+  if(c==='tortilla')return 'Värm tortillabröden i torr stekpanna.';
+  return '';
+}
+const TPL=[
+ {id:'wok',meals:['middag','lunch'],min:20,P:['kyckling','flaskfile','tofu','rakor'],C:['ris'],V:['wok','broccoli','paprika'],
+  fixed:[['soja',15,'F'],['olja',5,'F'],['vitlok',3,'V']],
+  name:(p,c,v)=>`${PWOK[p]} med ${CN[c]} och ${VN[v]}`,
+  steps:(p,c,v)=>[carbStep(c),PREP[p],`Stek ${VN[v]} med pressad vitlök i samma panna.`,`Häll i sojasåsen, lägg tillbaka proteinet och vänd runt. Servera över ${CN[c]}.`]},
+ {id:'curry',meals:['middag','lunch'],min:30,P:['kyckling','tofu','kikartor','linser','rakor'],C:['ris'],V:['wok','spenat','paprika','broccoli'],
+  fixed:[['kokos',80,'F'],['curry',10,'F'],['lok',30,'V'],['olja',5,'F']],
+  name:(p,c,v)=>`${PNOUN[p]} i curry med ${CN[c]} och ${VN[v]}`,
+  steps:(p,c,v)=>[carbStep(c),'Fräs hackad lök med currypastan i olja i någon minut.',
+    p==='linser'?'Häll i kokosmjölken, linserna och 1 dl vatten. Sjud i 15 minuter.':'Häll i kokosmjölken och låt koka upp.',
+    p==='linser'?'':`${PREP[p]} Lägg ner i såsen och sjud tills det är klart.`,
+    `Rör ner ${VN[v]} och sjud några minuter. Smaka av med salt och servera med ${CN[c]}.`]},
+ {id:'tomatpasta',meals:['middag','lunch'],min:35,P:['notfars','blandfars','kalkonfars','linser','bonor'],C:['pasta','fkpasta'],V:[],
+  fixed:[['krossad',150,'V'],['lok',40,'V'],['morot',40,'V'],['puree',10,'F'],['olja',5,'F']],
+  name:(p,c)=>`${CN[c].charAt(0).toUpperCase()+CN[c].slice(1)} med ${PSAUCE[p]}`,
+  steps:(p,c)=>[carbStep(c),'Fräs hackad lök och riven morot i olja.',PREP[p],
+    p==='linser'?'Rör ner linserna, krossade tomater, tomatpuré och 1 dl vatten. Sjud i 15 minuter.':'Rör ner krossade tomater och tomatpuré och sjud i ca 15 minuter.',
+    'Smaka av med salt och peppar, blanda med pastan och servera.']},
+ {id:'kramigpasta',meals:['middag','lunch'],min:25,P:['kyckling','rakor'],C:['pasta','fkpasta'],V:['spenat','paprika','champinjon','broccoli'],
+  fixed:[['gradde',40,'F'],['vitlok',4,'V'],['olja',5,'F']],
+  name:(p,c,v)=>`Krämig ${CN[c]} med ${PLOW[p]} och ${VN[v]}`,
+  steps:(p,c,v)=>[carbStep(c),PREP[p],`Stek ${VN[v]} med pressad vitlök.`,'Häll i matlagningsgrädden, lägg tillbaka proteinet och sjud ihop några minuter.','Blanda med pastan och smaka av med salt och peppar.']},
+ {id:'ugn',meals:['middag'],min:40,P:['lax','torsk','kyckling','flaskfile'],C:['potatis','sotpotatis','ris'],V:['broccoli','morot','paprika'],
+  fixed:[['olja',8,'F']],
+  name:(p,c,v)=>`Ugnsbakad ${PLOW[p]} med ${CN[c]} och ${VN[v]}`,
+  steps:(p,c,v)=>[carbStep(c,true),`Lägg ${PLOW[p]} i en ugnsform, ringla över olja och salta. Baka mitt i ugnen i 200 grader tills den är genomstekt, 15 till 25 minuter beroende på tjocklek.`,`Tillaga ${VN[v]} mjuk, i ugnen eller i kastrull.`,'Servera allt tillsammans.']},
+ {id:'taco',meals:['middag','lunch'],min:25,P:['kalkonfars','notfars','blandfars','kyckling','bonor'],C:['tortilla'],V:[],
+  fixed:[['taco',8,'F'],['salsa',40,'F'],['paprika',50,'V'],['majs',40,'V'],['tomat',60,'V'],['grekyog',30,'F'],['olja',4,'F']],
+  name:(p)=>`Tacos med ${PLOW[p]}`,
+  steps:(p,c)=>[PREP[p],'Rör ner tacokryddan och en skvätt vatten och sjud några minuter.','Skär paprika och tomat. Värm tortillabröden.','Fyll tortillorna med fyllningen, grönsaker, majs, salsa och yoghurt.']},
+ {id:'chili',meals:['middag','lunch'],min:35,P:['notfars','blandfars','kalkonfars','bonor','linser'],C:['ris','potatis'],V:[],
+  fixed:[['krossad',150,'V'],['lok',40,'V'],['paprika',60,'V'],['puree',8,'F'],['olja',5,'F']],
+  name:(p,c)=>`Chili med ${PLOW[p]} och ${CN[c]}`,
+  steps:(p,c)=>[carbStep(c),'Fräs hackad lök och paprika i olja.',PREP[p],'Rör ner krossade tomater och tomatpuré, med 1 dl vatten, och sjud i 20 minuter.',`Smaka av med salt, peppar och chili. Servera med ${CN[c]}.`]},
+ {id:'omelett',meals:['middag','lunch'],min:15,P:['agg'],C:['brod'],V:['spenat','paprika','champinjon'],
+  fixed:[['olja',5,'F']],
+  name:(p,c,v)=>`Omelett med ${VN[v]} och bröd`,
+  steps:(p,c,v)=>[`Skär ${VN[v]} och fräs mjukt i olja.`,PREP.agg,'Häll över äggen och stek på medelvärme tills de stelnat.','Servera med bröd.']},
+ {id:'wrap',meals:['lunch','middag'],min:15,P:['kyckling','kalkonfars','bonor'],C:['tortilla'],V:[],pg:{kyckling:120,kalkonfars:110,bonor:120},cg:{tortilla:80},
+  fixed:[['grekyog',40,'F'],['gurka',50,'V'],['tomat',50,'V'],['paprika',40,'V'],['olja',3,'F']],
+  name:(p)=>`Wrap med ${PLOW[p]} och grönsaker`,
+  steps:(p)=>[PREP[p],'Skär gurka, tomat och paprika.','Bred yoghurt på tortillan, lägg på proteinet och grönsakerna och rulla ihop.']},
+ {id:'kvargskal',meals:['frukost','mellanmal'],min:5,P:['kvarg','grekyog'],C:['havre','banan'],V:['bar'],cg:{havre:30,banan:100},
+  fixed:[['notter',15,'F']],
+  name:(p,c)=>`${PNOUN[p]} med ${CN[c]} och bär`,
+  steps:(p,c)=>[`Lägg ${PLOW[p]} i en skål.`,`Toppa med ${c==='banan'?'skivad banan':'havregryn'}, bär och hackade mandlar.`]}
+];
+function genRecipes(){
+  const off=offerIndex(),al=allowedIds(),out=[];
+  const demo=!state.offers&&!LIVE;
+  const pk=pickedPids();
+  const onOffer=pid=>!!pk[pid]||al.some(sid=>{const o=off[sid+'|'+pid];return o&&(o.reg>0||demo)});
+  TPL.forEach(t=>{
+    const cands=[];
+    t.P.forEach(p=>t.C.forEach(c=>(t.V.length?t.V:[null]).forEach(v=>{
+      if(!onOffer(p)&&!onOffer(c))return;
+      const ing=[[p,(t.pg&&t.pg[p])||PG[p],'P'],[c,(t.cg&&t.cg[c])||CG[c],'C']];
+      if(v)ing.push([v,VG[v],'V']);
+      t.fixed.forEach(f=>ing.push(f.slice()));
+      const r={id:'g-'+t.id+'-'+[p,c,v].filter(Boolean).join('-'),name:t.name(p,c,v),meals:t.meals,min:t.min,lf:1,gen:1,ing,
+               steps:t.steps(p,c,v).filter(Boolean),extra:[]};
+      const ci=costInfo(r,al,off);
+      const bonus=(pk[p]?1:0)+(pk[c]?.5:0)+(v&&pk[v]?.5:0);
+      cands.push({r,frac:(ci.reg>0?ci.save/ci.reg:0)+bonus,eff:ci.eff,p});
+    })));
+    cands.sort((a,b)=>b.frac-a.frac||a.eff-b.eff);
+    const seen={};let n=0;
+    cands.forEach(x=>{if(n<3&&!seen[x.p]){seen[x.p]=1;n++;out.push(x.r)}});
+  });
+  return out;
+}
+
 /* ================= tillstånd ================= */
 const KEY='veckohandla.v1';
 const DEFAULTS={
@@ -434,7 +564,7 @@ const DEFAULTS={
   stores:{willys:true,citygross:true,kvantum:true,maxi:true,lidl:true},
   meals:{frukost:{on:true,days:7,uniq:2},lunch:{on:true,days:5,uniq:2},middag:{on:true,days:5,uniq:5},mellanmal:{on:false,days:7,uniq:2}},
   w:{price:60,stores:50,health:60},
-  pantry:{},ratings:{},log:[],custom:[],offers:null,plan:null,chosen:null,ticked:{},seed:1,rkey:''
+  pantry:{},ratings:{},log:[],custom:[],offers:null,plan:null,chosen:null,ticked:{},seed:1,rkey:'',gen:true,picked:{}
 };
 function clone(o){return JSON.parse(JSON.stringify(o))}
 function loadState(){
@@ -458,13 +588,14 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
 let RECIPES=[],RBY={},STATS={};
 function rebuildRecipes(){
   RECIPES=R0.concat(state.custom||[]);RBY={};RECIPES.forEach(r=>RBY[r.id]=r);STATS={};
+  if(state.gen){genRecipes().forEach(r=>{if(!RBY[r.id]){RECIPES.push(r);RBY[r.id]=r}})}
 }
 
 /* ================= näringsberäkning ================= */
 const z=()=>({k:0,p:0,c:0,f:0});
 function stats(r){
   if(STATS[r.id])return STATS[r.id];
-  const g={P:z(),C:z(),R:z()};let tot=z(),vegG=0,mainP=null,mainG=0;const pids=[];
+  const g={P:z(),C:z(),R:z()};let tot=z(),vegG=0,mainP=null,mainG=0,mainC=null,mainCG=0;const pids=[];
   r.ing.forEach(([pid,gr,role])=>{
     const pr=PRODUCTS[pid];if(!pr)return;
     const m=gr/100,x={k:pr.k*m,p:pr.p*m,c:pr.c*m,f:pr.f*m};
@@ -472,9 +603,10 @@ function stats(r){
     ['k','p','c','f'].forEach(q=>{g[grp][q]+=x[q];tot[q]+=x[q]});
     if(role==='V')vegG+=gr;
     if(role==='P'&&gr>mainG){mainG=gr;mainP=pid}
+    if(role==='C'&&gr>mainCG){mainCG=gr;mainC=pid}
     pids.push(pid);
   });
-  return STATS[r.id]={g,k:tot.k,p:tot.p,c:tot.c,f:tot.f,vegG,mainP,pids};
+  return STATS[r.id]={g,k:tot.k,p:tot.p,c:tot.c,f:tot.f,vegG,mainP,mainC,pids};
 }
 function targets(pp){
   const bmr=10*pp.weight+6.25*pp.height-5*pp.age+(pp.sex==='m'?5:-161);
@@ -518,27 +650,67 @@ function dist(meal,n){
 /* ================= priser och erbjudanden ================= */
 let LIVE=null;
 function getOffers(){return state.offers||(LIVE&&LIVE.offers)||DEFAULT_OFFERS}
+function allOffers(){return (LIVE&&LIVE.all)||getOffers()}
+function pickedOffers(){return allOffers().filter(o=>state.picked[o.id]&&!isExpired(o))}
+function pickedPids(){const m={};pickedOffers().forEach(o=>{if(o.pid)m[o.pid]=o});return m}
 function isExpired(o){return o.until&&new Date(o.until+'T23:59:59')<new Date()}
 function offerEff(o){return o.kind==='multi'?o.price*o.pay/o.buy:o.price}
+function regPerPack(o){
+  if(o.reg>0)return o.reg;
+  const est=priceOf(o.pid,o.store);if(est==null)return null;
+  const pk=PRODUCTS[o.pid].pack;
+  return est*((o.packG>0?o.packG:pk)/pk);
+}
 function offerIndex(){
   const idx={};
   getOffers().forEach(o=>{
     if(!PRODUCTS[o.pid]||isExpired(o))return;
-    const reg=priceOf(o.pid,o.store);if(reg==null||offerEff(o)>=reg)return;
+    const reg=regPerPack(o);if(reg==null||offerEff(o)>=reg)return;
     const k=o.store+'|'+o.pid;
-    if(!idx[k]||offerEff(o)<offerEff(idx[k]))idx[k]=o;
+    if(!idx[k]||offerEff(o)/(o.packG||PRODUCTS[o.pid].pack)<offerEff(idx[k])/(idx[k].packG||PRODUCTS[o.pid].pack))idx[k]=o;
   });
   return idx;
 }
+function offerFull(o){return offerLabel(o)+(o.reg>0?', ord. '+n0(o.reg)+' kr':'')}
 function offerLabel(o){
   const mx=o.max>0?', max '+o.max:'';
-  return (o.kind==='multi'?o.buy+' för '+o.pay:n0(o.price)+' kr')+mx;
+  if(o.kind==='multi'&&o.pay<o.buy)return o.buy+' för '+o.pay+mx;
+  if(o.kind==='multi')return o.buy+' för '+n0(o.price*o.buy)+' kr'+mx;
+  return n0(o.price)+' kr'+mx;
+}
+/* Vad priset faktiskt gäller, i klartext */
+function offerWhat(o){
+  const pk=o.packG>0?packText(o.pid||'',o.packG):(o.qty||'');
+  const per=pk?' per '+pk:' per förpackning';
+  if(o.kind==='multi'&&o.pay<o.buy)return `Betala för ${o.pay} när du köper ${o.buy}, ${n0(o.price)} kr styck${per}`;
+  if(o.kind==='multi')return `${n0(o.price*o.buy)} kr för ${o.buy} st, ${n0(o.price)} kr styck${per}`;
+  return `${n0(o.price)} kr${per}`;
+}
+function offerSave(o){
+  if(!(o.reg>0))return '';
+  const n=o.kind==='multi'?o.buy:1;
+  const d=o.reg*n-o.price*(o.kind==='multi'?o.pay:1);
+  if(d<=0)return '';
+  return `Du sparar ${n0(d)} kr${n>1?' på '+n+' st':''}`;
+}
+function regNote(o){
+  if(o.reg>0)return 'Ordinarie '+n0(o.reg)+' kr'+(o.regSrc==='spara'?' (räknat ur sparbeloppet)':'');
+  const e=regPerPack(o);
+  return e!=null?'Ordinarie pris saknas i bladet, uppskattat till ca '+n0(e)+' kr':'Ordinarie pris okänt';
+}
+function packNote(o){
+  if(o.packG>0)return packText(o.pid||'',o.packG);
+  if(o.qty)return o.qty;
+  return o.pid?'okänd, räknas som '+packText(o.pid,PRODUCTS[o.pid].pack):'okänd';
 }
 function allowedIds(){const a=STORES.filter(s=>state.stores[s.id]).map(s=>s.id);return a.length?a:STORES.map(s=>s.id)}
 
-function packCost(pid,sid,n,off){
-  const reg=priceOf(pid,sid);if(reg==null)return null;
-  const p=PRODUCTS[pid],o=off[sid+'|'+pid];
+function packCost(pid,sid,grams,off){
+  const p=PRODUCTS[pid],o=off[sid+'|'+pid],est=priceOf(pid,sid);
+  if(est==null&&!o)return null;
+  const base=(o&&o.packG>0)?o.packG:p.pack;
+  const n=Math.max(1,Math.ceil(grams/base-0.1));
+  const reg=o?regPerPack(o):est;
   let bought=n,cost=n*reg,used=null;
   if(o){
     const ue=offerEff(o);
@@ -555,22 +727,25 @@ function packCost(pid,sid,n,off){
     }
   }
   const extra=Math.max(0,bought-n);
-  return {sid,pid,n,bought,extra,cost,needCost:cost*(n/bought),reg,used,savings:Math.max(0,bought*reg-cost)};
+  return {sid,pid,n,bought,extra,cost,needCost:cost*(n/bought),reg,packG:base,used,savings:Math.max(0,bought*reg-cost)};
 }
 function evalSet(ids,needs,off){
-  const lines=[],missing=[];let cost=0,need=0,save=0;
+  const lines=[],missing=[];let cost=0,need=0,save=0,hits=0;
   for(const pid in needs){
-    const n=needs[pid].packs;let best=null;
-    ids.forEach(sid=>{const r=packCost(pid,sid,n,off);if(r&&(!best||r.needCost<best.needCost-1e-9))best=r});
-    if(best){lines.push(best);cost+=best.cost;need+=best.needCost;save+=best.savings}
+    const gr=needs[pid].grams;let best=null;
+    ids.forEach(sid=>{
+      const r=packCost(pid,sid,gr,off);if(!r)return;
+      const better=!best||(r.used?1:0)>(best.used?1:0)||((r.used?1:0)===(best.used?1:0)&&r.needCost<best.needCost-1e-9);
+      if(better)best=r;
+    });
+    if(best){best.grams=gr;lines.push(best);cost+=best.cost;need+=best.needCost;save+=best.savings;if(best.used)hits++}
     else{
-      let alt=null;allowedIds().forEach(sid=>{const r=packCost(pid,sid,n,off);if(r&&(!alt||r.needCost<alt.needCost))alt=r});
-      missing.push({pid,n,alt});if(alt){cost+=alt.cost;need+=alt.needCost}
+      let alt=null;allowedIds().forEach(sid=>{const r=packCost(pid,sid,gr,off);if(r&&(!alt||r.needCost<alt.needCost))alt=r});
+      missing.push({pid,n:alt?alt.n:needs[pid].packs,alt});if(alt){cost+=alt.cost;need+=alt.needCost}
     }
   }
-  return {ids,lines,missing,cost,need,save};
+  return {ids,lines,missing,cost,need,save,hits};
 }
-let EXTRAS={};
 function computeNeeds(){
   const grams={};EXTRAS={};
   MEALS.forEach(m=>{
@@ -602,22 +777,27 @@ function calc(){
   const sets=[];
   allowed.forEach(a=>sets.push([a]));
   for(let i=0;i<allowed.length;i++)for(let j=i+1;j<allowed.length;j++)sets.push([allowed[i],allowed[j]]);
-  const pen=state.w.stores*3;
+  // Butiksvalet styrs av hur många av veckans varor som är på erbjudande, inte av totalsumman.
+  const pen=1+state.w.stores/35;              // hur många extra fynd ett andra besök måste ge
   const options=sets.map(ids=>{
     const ev=evalSet(ids,needs,off);
-    ev.eff=ev.need+pen*(ids.length-1)+120*ev.missing.length;
+    ev.score=ev.hits-pen*(ids.length-1)-1.5*ev.missing.length;
     ev.key=ids.join('+');
     return ev;
   });
-  options.sort((a,b)=>a.eff-b.eff||a.ids.length-b.ids.length);
+  options.sort((a,b)=>b.score-a.score||b.save-a.save||a.ids.length-b.ids.length);
   const auto=options[0];
   let active=auto;
   if(state.chosen){const k=state.chosen.join('+');const f=options.find(o=>o.key===k);if(f)active=f}
-  const singles=options.filter(o=>o.ids.length===1).sort((a,b)=>(a.need+60*a.missing.length)-(b.need+60*b.missing.length));
-  const pairs=options.filter(o=>o.ids.length===2).sort((a,b)=>a.need-b.need);
+  const singles=options.filter(o=>o.ids.length===1).sort((a,b)=>(b.hits-1.5*b.missing.length)-(a.hits-1.5*a.missing.length)||b.save-a.save);
+  const pairs=options.filter(o=>o.ids.length===2).sort((a,b)=>(b.hits-1.5*b.missing.length)-(a.hits-1.5*a.missing.length)||b.save-a.save);
   const days={};
   MEALS.forEach(m=>{days[m.k]=dist(m.k,((state.plan&&state.plan[m.k])||[]).length)});
-  return {off,allowed,needs,extras:EXTRAS,options,auto,active,singles,pairs,days,
+  const picks=pickedOffers().filter(o=>{
+    if(!state.stores[o.store])return false;
+    return !o.pid||!needs[o.pid]||active.lines.every(l=>!(l.pid===o.pid&&l.used&&l.used.id===o.id));
+  });
+  return {off,allowed,needs,extras:EXTRAS,picks,options,auto,active,singles,pairs,days,
           bestSingle:singles[0]||null,bestPair:pairs[0]||null};
 }
 
@@ -626,16 +806,18 @@ function costInfo(r,set,off){
   let eff=0,reg=0;
   r.ing.forEach(([pid,g])=>{
     const pk=PRODUCTS[pid].pack;
-    let sids=set.filter(s=>priceOf(pid,s)!=null);
-    if(!sids.length)sids=allowedIds().filter(s=>priceOf(pid,s)!=null);
+    const ok=s=>priceOf(pid,s)!=null||off[s+'|'+pid];
+    let sids=set.filter(ok);
+    if(!sids.length)sids=allowedIds().filter(ok);
     let rg=Infinity,ef=Infinity;
     sids.forEach(s=>{
-      const pr=priceOf(pid,s);let u=pr;const o=off[s+'|'+pid];
-      if(o&&offerEff(o)<u)u=offerEff(o);
-      rg=Math.min(rg,pr);ef=Math.min(ef,u);
+      const o=off[s+'|'+pid],og=(o&&o.packG>0)?o.packG:pk;
+      const rpg=o?regPerPack(o)/og:priceOf(pid,s)/pk;
+      let u=rpg;if(o)u=Math.min(u,offerEff(o)/og);
+      rg=Math.min(rg,rpg);ef=Math.min(ef,u);
     });
-    if(!isFinite(rg)){rg=ef=PRODUCTS[pid].base}
-    eff+=g*ef/pk;reg+=g*rg/pk;
+    if(!isFinite(rg)){rg=ef=PRODUCTS[pid].base/pk}
+    eff+=g*ef;reg+=g*rg;
   });
   return {eff,reg,save:reg-eff};
 }
@@ -663,19 +845,26 @@ function scoreCands(meal,ctx){
     const sav=Math.min(1,(ci.save/Math.max(1,ci.reg))/.3);
     const price=.5*cheap+.5*sav;
     let s=1.2*wh*health+1.2*wp*price;
+    const pk=ctx.picked||{};
+    const nPicked=st.pids.filter(p=>pk[p]).length;
+    if(nPicked)s+=1.4*Math.min(2,nPicked);
     const rt=state.ratings[r.id];
     if(rt)s+=(rt-3)*.3-(rt<=2?.8:0);
     if(last[r.id]!=null){const d=(now-last[r.id])/864e5;if(d<8)s-=(rt>=4?.15:.5);else if(d<15)s-=(rt>=4?0:.2)}
     if(state.lf&&!r.lf)s-=.5;
     s-=.25*ctx.proteins.filter(x=>x===st.mainP).length;
+    if(meal==='middag'||meal==='lunch'){
+      s-=.5*ctx.carbs.filter(x=>x===st.mainC).length;
+      if(r.gen)s-=.4*ctx.tpls.filter(x=>x===r.id.split('-')[1]).length;
+    }
     const shared=st.pids.filter(p=>ctx.pids.has(p)&&!state.pantry[p]).length;
     s+=Math.min(.3,.05*shared);
     s+=ctx.noise*(((hash(r.id+':'+state.seed)%1000)/500)-1);
     return {r,s,ci};
   }).sort((a,b)=>b.s-a.s);
 }
-function note(ctx,rid){const r=RBY[rid];if(!r)return;const st=stats(r);ctx.proteins.push(st.mainP);st.pids.forEach(p=>ctx.pids.add(p))}
-function newCtx(set,noise){return {set,off:offerIndex(),noise:noise||0,proteins:[],pids:new Set()}}
+function note(ctx,rid){const r=RBY[rid];if(!r)return;const st=stats(r);ctx.proteins.push(st.mainP);ctx.carbs.push(st.mainC);if(r.gen)ctx.tpls.push(r.id.split('-')[1]);st.pids.forEach(p=>ctx.pids.add(p))}
+function newCtx(set,noise){return {set,off:offerIndex(),noise:noise||0,picked:pickedPids(),proteins:[],carbs:[],tpls:[],pids:new Set()}}
 function buildPlan(set,noise,keepAll,prev){
   const ctx=newCtx(set,noise),plan={};prev=prev||{};
   ORDER.forEach(mk=>{
@@ -719,21 +908,28 @@ function stars(rid){
   return h+'</span>';
 }
 function insight(c){
-  const a=c.active,bs=c.bestSingle,bp=c.bestPair;
+  const a=c.active,bs=c.bestSingle;
   if(!bs)return '';
-  if(a.ids.length===2&&bs){
-    const d=bs.need-a.need;
-    return d>1?`Det andra besöket sparar ${kr(d)} jämfört med att handla allt hos ${SNAME[bs.ids[0]]}.`:`Det andra besöket sparar ingenting jämfört med att handla allt hos ${SNAME[bs.ids[0]]}.`;
+  if(a.ids.length===2){
+    const d=a.hits-bs.hits;
+    return d>0?`Det andra besöket ger ${d} fler fynd än att handla allt hos ${SNAME[bs.ids[0]]}.`
+              :`Det andra besöket ger inga fler fynd än ${SNAME[bs.ids[0]]}.`;
   }
-  if(bp){const d=a.need-bp.need;return d>1?`Ett andra besök hos ${bp.ids.map(i=>SNAME[i]).join(' och ')} skulle spara ${kr(d)}.`:'Ett andra besök skulle inte spara något.'}
+  const bp=c.bestPair;
+  if(bp){const d=bp.hits-a.hits;return d>0?`Ett andra besök hos ${bp.ids.map(i=>SNAME[i]).join(' och ')} skulle ge ${d} fler fynd.`:'Ett andra besök skulle inte ge fler fynd.'}
   return '';
 }
+function stepsBlock(r){
+  return (r.steps&&r.steps.length)?`<details class="ing"><summary>Så gör du</summary><ol style="margin:.3rem 0;padding-left:1.2rem">${r.steps.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></details>`:'';
+}
 function srcLine(r){
+  if(r.gen)return `<p class="small muted"><span class="tag">Kampanjrecept</span> Skapat av appen utifrån veckans erbjudanden.</p>`;
   if(!r.api)return '';
   return `<p class="small muted">Recept från ${esc(r.src||'okänd källa')}${r.link?`, <a href="${esc(r.link)}" target="_blank" rel="noopener noreferrer">originalrecept</a>`:''}. <a href="https://receptapi.se" target="_blank" rel="noopener noreferrer">Data från ReceptAPI – receptapi.se</a></p>`;
 }
 function planCard(m,i,e,c){
-  const r=RBY[e.rid],days=c.days[m.k][i],per=portionsFor(m.k,r);
+  const r=RBY[e.rid];if(!r)return '';
+  const days=c.days[m.k][i],per=portionsFor(m.k,r);
   const cands=RECIPES.filter(x=>x.meals.includes(m.k));
   const opts=cands.map(x=>`<option value="${x.id}"${sel(x.id,r.id)}>${esc(x.name)}</option>`).join('');
   const tags=[];const setIds=c.active.ids;
@@ -753,6 +949,7 @@ function planCard(m,i,e,c){
     <ul class="persons">${per.map(a=>`<li><span class="pn">${esc(a.pp.name)}</span><b>${n0(a.k)} kcal</b><span class="muted">protein ${n0(a.p)} g, kolhydrater ${n0(a.c)} g, fett ${n0(a.f)} g</span></li>`).join('')}</ul>
     ${tags.length?`<div class="chips">${tags.slice(0,5).join('')}</div>`:''}
     <details class="ing"><summary>Mängder per person</summary><table class="t">${head}${rows}${xrows}</table><p class="small muted">Gram för varje måltid. Torrvaror vägs före tillagning.</p></details>
+    ${stepsBlock(r)}
     <div class="tools">${stars(r.id)}
       <button class="btn sm" data-act="swap" data-m="${m.k}" data-i="${i}">Byt</button>
       <button class="btn sm" data-act="lock" data-m="${m.k}" data-i="${i}" aria-pressed="${e.locked}">${e.locked?'Låst':'Lås'}</button>
@@ -765,8 +962,8 @@ function viewPlan(c){
   let h='';
   if(!has)return `<div class="empty">Slå på minst en måltid under Inställningar för att få en veckoplan.</div>`;
   h+=`<section class="basket">
-    <div class="total"><span class="amt">${kr(a.cost)}</span><span class="lbl">för hela veckan</span></div>
-    <div><p><strong>Handla hos ${a.ids.map(i=>SNAME[i]).join(' och ')}.</strong> Kampanjer sparar ${kr(a.save)}.</p>
+    <div class="total"><span class="amt">${n0(a.hits)}</span><span class="lbl">fynd i veckans plan</span></div>
+    <div><p><strong>Handla hos ${a.ids.map(i=>SNAME[i]).join(' och ')}.</strong> ${a.hits===1?'En vara':`${n0(a.hits)} varor`} i planen ligger på erbjudande${a.save>0?`, uppskattad besparing ${kr(a.save)}`:''}.</p>
     <p class="muted small">${esc(insight(c))}</p></div>
     <button class="btn primary" data-act="tab" data-tab="list">Öppna inköpslistan</button></section>`;
   h+=`<section class="card"><h2>Vad ska planen prioritera?</h2>
@@ -791,77 +988,96 @@ function slider(k,label,v,desc){
 function noteText(c){
   const a=c.active,wk=isoWeek(new Date());
   let t=`Inköpslista vecka ${wk}, ${state.persons.length} ${state.persons.length===1?'person':'personer'}, Hässleholm\n`;
-  const groups=groupByStore(a);
-  groups.forEach(g=>{
-    t+=`\n${SNAME[g.sid].toUpperCase()}\n`;
+  groupByStore(c).forEach(g=>{
+    t+='\n'+(g.sid==='*'?'ÖVRIGT, KÖP DÄR DU ÄNDÅ HANDLAR':SNAME[g.sid].toUpperCase());
+    if(g.sid!=='*')t+=` (${g.hits} ${g.hits===1?'erbjudande':'erbjudanden'})`;
+    t+='\n';
     g.lines.forEach(l=>{
-      const p=PRODUCTS[l.pid];
-      t+=`[ ] ${l.bought} st ${p.name} (${p.pack} g), ${kr(l.cost)}${l.used?', kampanj '+offerLabel(l.used):''}${l.extra?`, varav ${l.extra} extra i förråd`:''}\n`;
+      t+=`[ ] ${PRODUCTS[l.pid].name}: ${amountText(l.pid,l.grams)}`;
+      if(l.used)t+=` — ${offerLabel(l.used)}, ${packNote(l.used)}`;
+      if(l.extra)t+=` + ${l.extra} till förrådet`;
+      t+='\n';
     });
-    t+=`Delsumma: ${kr(g.sum)}\n`;
   });
-  if(a.missing.length){
-    t+='\nSAKNAS I VALDA BUTIKER\n';
-    a.missing.forEach(m=>{const p=PRODUCTS[m.pid];t+=`[ ] ${m.n} st ${p.name}${m.alt?`, ca ${kr(m.alt.cost)} hos ${SNAME[m.alt.sid]}`:''}\n`});
+  if(c.picks.length){
+    t+='\nDU HAR VALT UR REKLAMBLADEN\n';
+    c.picks.forEach(o=>{t+=`[ ] ${o.heading} — ${SNAME[o.store]}, ${offerLabel(o)}\n`});
   }
   const xs=Object.keys(c.extras||{});
   if(xs.length){
-    t+='\nOVRIGT, UTAN PRIS I APPEN\n';
+    t+='\nÖVRIGA INGREDIENSER FRÅN RECEPTEN\n';
     xs.forEach(n=>{const e=c.extras[n];t+=`[ ] ${n}${e.known&&e.g>0?`, ca ${n0(Math.round(e.g/10)*10)} g`:`, ${e.text}`}\n`});
   }
-  t+=`\nTOTALT: ${kr(a.cost)}\nKampanjer sparar: ${kr(a.save)}\n`;
-  const fo=a.cost-a.need;if(fo>1)t+=`Varav förråd för kommande veckor: ${kr(fo)}\n`;
+  if(a.missing.length){
+    t+='\nFINNS INTE I VALDA BUTIKER\n';
+    a.missing.forEach(m=>{t+=`[ ] ${PRODUCTS[m.pid].name}: ${amountText(m.pid,c.needs[m.pid].grams)}\n`});
+  }
   return t;
 }
-function groupByStore(a){
+/* Varor med erbjudande hamnar hos sin butik, övriga under Övrigt. */
+function groupByStore(c){
   const m={};
-  a.lines.forEach(l=>{(m[l.sid]=m[l.sid]||{sid:l.sid,lines:[],sum:0});m[l.sid].lines.push(l);m[l.sid].sum+=l.cost});
+  c.active.lines.forEach(l=>{
+    const key=l.used?l.sid:'*';
+    (m[key]=m[key]||{sid:key,lines:[],hits:0});
+    m[key].lines.push(l);if(l.used)m[key].hits++;
+  });
   const arr=Object.keys(m).map(k=>m[k]);
   arr.forEach(g=>g.lines.sort((x,y)=>CATS.indexOf(PRODUCTS[x.pid].cat)-CATS.indexOf(PRODUCTS[y.pid].cat)||PRODUCTS[x.pid].name.localeCompare(PRODUCTS[y.pid].name,'sv')));
-  arr.sort((x,y)=>y.sum-x.sum);return arr;
+  arr.sort((x,y)=>(x.sid==='*')-(y.sid==='*')||y.hits-x.hits);
+  return arr;
+}
+function offerNoteLine(l){
+  const o=l.used;
+  if(!o)return `${l.bought} ${l.bought===1?'förpackning':'förpackningar'} à ${packText(l.pid,l.packG)}`;
+  const bits=[`${l.bought} × ${packNote(o)}`,offerWhat(o)];
+  const sv=offerSave(o);if(sv)bits.push(sv);
+  if(l.extra)bits.push(`${l.extra} extra till förrådet`);
+  return bits.join('. ');
 }
 function viewList(c){
   const a=c.active;
   let h=`<section class="card"><h2>Hur många butiker?</h2><p>${esc(insight(c))}</p>
-    <p class="muted small">Jämförelsen räknar bara på varor du behöver, så förråd av fryst och torrvaror påverkar inte rankingen.</p><div class="opts">`;
-  h+=`<button class="opt${state.chosen?'':' on'}" data-act="autoset"><span class="nm">Låt appen välja (${c.auto.ids.map(i=>SNAME[i]).join(' + ')})</span><span class="pr">${kr(c.auto.cost)}</span><span class="dl">Väger pris mot antal butiker enligt reglaget Minst antal butiker.</span></button>`;
-  const base=c.bestSingle?c.bestSingle.need:0;
-  const show=c.singles.concat(c.pairs.slice(0,4));
-  show.forEach(o=>{
-    const d=o.need-base;
-    const dl=o.ids.length===1?(o===c.bestSingle?'Billigaste enskilda butiken':(d<0?'Lägst summa, men du måste handla en del på annat håll':`${kr(d)} dyrare än billigaste enskilda butiken`)):(d<-1?`Sparar ${kr(-d)} mot billigaste enskilda butiken`:'Sparar inget mot billigaste enskilda butiken');
-    const miss=o.missing.length?`, ${o.missing.length} varor finns inte här`:'';
-    h+=`<button class="opt${state.chosen&&state.chosen.join('+')===o.key?' on':''}" data-act="pickset" data-set="${o.key}"><span class="nm">${o.ids.map(i=>SNAME[i]).join(' + ')}</span><span class="pr">${kr(o.cost)}</span><span class="dl">${dl}${miss}</span></button>`;
+    <p class="muted small">Rankningen räknar hur många av veckans varor som ligger på erbjudande, eftersom appen inte kan hämta butikernas ordinarie priser.</p><div class="opts">`;
+  h+=`<button class="opt${state.chosen?'':' on'}" data-act="autoset"><span class="nm">Låt appen välja (${c.auto.ids.map(i=>SNAME[i]).join(' + ')})</span><span class="pr">${c.auto.hits} fynd</span><span class="dl">Väger antal fynd mot antal butiker enligt reglaget Minst antal butiker.</span></button>`;
+  c.singles.concat(c.pairs.slice(0,4)).forEach(o=>{
+    const dl=`${o.hits} av veckans varor på erbjudande`+(o.missing.length?`, ${o.missing.length} varor saknas`:'');
+    h+=`<button class="opt${state.chosen&&state.chosen.join('+')===o.key?' on':''}" data-act="pickset" data-set="${o.key}"><span class="nm">${o.ids.map(i=>SNAME[i]).join(' + ')}</span><span class="pr">${o.hits} fynd</span><span class="dl">${esc(dl)}</span></button>`;
   });
   h+='</div></section>';
-  const groups=groupByStore(a);
-  if(!groups.length)return h+'<div class="empty">Inget att handla. Allt finns hemma eller så är planen tom.</div>';
+  const groups=groupByStore(c);
+  if(!groups.length&&!c.picks.length)return h+'<div class="empty">Inget att handla. Allt finns hemma eller så är planen tom.</div>';
   h+='<div class="receipts">';
   groups.forEach(g=>{
-    h+=`<div><div class="receipt"><h3><span>${esc(SNAME[g.sid])}</span><span>${kr(g.sum)}</span></h3>`;
+    const nm=g.sid==='*'?'Övrigt':SNAME[g.sid];
+    h+=`<div><div class="receipt"><h3><span>${esc(nm)}</span>${g.sid==='*'?'<span class="muted" style="font-size:.78rem;font-weight:600">köp där du ändå handlar</span>':`<span class="tag">${g.hits} ${g.hits===1?'erbjudande':'erbjudanden'}</span>`}</h3>`;
     let lastCat='';
     g.lines.forEach(l=>{
       const p=PRODUCTS[l.pid];
       if(p.cat!==lastCat){h+=`<div class="catlbl">${esc(p.cat)}</div>`;lastCat=p.cat}
       const done=state.ticked[l.pid];
       h+=`<div class="line${done?' done':''}"><input type="checkbox" data-act="tick" data-pid="${l.pid}"${chk(done)} aria-label="Bocka av ${esc(p.name)}">
-        <div class="nm">${l.bought} × ${esc(p.name)}<small>${p.pack} g per förpackning, behöver ca ${n0(c.needs[l.pid].grams)} g${l.extra?`, ${l.extra} extra till förråd`:''}</small>${l.used?`<span class="tag">${esc(offerLabel(l.used))}</span>`:''}</div>
-        <div class="pr">${kr(l.cost)}</div></div>`;
+        <div class="nm">${esc(p.name)}<small>${esc(offerNoteLine(l))}</small>${l.used?`<span class="tag">${esc(offerLabel(l.used))}</span>`:''}</div>
+        <div class="pr">${esc(amountText(l.pid,l.grams))}</div></div>`;
     });
-    h+=`<div class="sum"><span>Delsumma</span><b>${kr(g.sum)}</b></div></div></div>`;
+    h+='</div></div>';
   });
   h+='</div>';
+  if(c.picks.length){
+    h+=`<section class="card" style="margin-top:1.2rem"><h2>Du har valt ur reklambladen</h2>`+
+      c.picks.map(o=>{const done=state.ticked['o:'+o.id];
+        return `<div class="line${done?' done':''}"><input type="checkbox" data-act="tick" data-pid="o:${o.id}"${chk(done)} aria-label="Bocka av">
+        <div class="nm">${esc(o.heading)}<small>${esc(SNAME[o.store])}. ${esc(offerWhat(o))}${offerSave(o)?'. '+esc(offerSave(o)):''}</small></div>
+        <div class="pr"><span class="tag">${esc(offerLabel(o))}</span></div></div>`}).join('')+`</section>`;
+  }
   const xs=Object.keys(c.extras||{});
   if(xs.length){
-    h+=`<section class="card" style="margin-top:1.2rem"><h2>Utan pris i appen</h2><p class="muted small">Ingredienser från hämtade recept som inte finns i appens varulista. Räkna in dem själv.</p>`+
+    h+=`<section class="card" style="margin-top:1.2rem"><h2>Övriga ingredienser från recepten</h2><p class="muted small">Finns inte i appens varulista, så de kopplas inte till erbjudanden.</p>`+
       xs.map(n=>{const e=c.extras[n];return `<div class="line" style="grid-template-columns:1fr auto"><span>${esc(n)}</span><span class="muted">${e.known&&e.g>0?'ca '+n0(Math.round(e.g/10)*10)+' g':esc(e.text)}</span></div>`}).join('')+`</section>`;
   }
-  h+=`<section class="card" style="margin-top:1.2rem"><div class="sum big"><span>Totalt</span><span>${kr(a.cost)}</span></div>
-    <div class="stat small"><span>Kampanjer sparar <b>${kr(a.save)}</b></span>${a.cost-a.need>1?`<span>Varav förråd <b>${kr(a.cost-a.need)}</b></span>`:''}</div>`;
   if(a.missing.length){
-    h+=`<hr class="sep"><p><strong>Finns inte i valda butiker:</strong></p><ul>`+a.missing.map(m=>`<li>${m.n} × ${esc(PRODUCTS[m.pid].name)}${m.alt?`, ca ${kr(m.alt.cost)} hos ${SNAME[m.alt.sid]}`:''}</li>`).join('')+'</ul>';
+    h+=`<section class="card"><h2>Finns inte i valda butiker</h2>`+a.missing.map(m=>`<div class="line" style="grid-template-columns:1fr auto"><span>${esc(PRODUCTS[m.pid].name)}</span><span class="muted">${esc(amountText(m.pid,c.needs[m.pid].grams))}</span></div>`).join('')+`</section>`;
   }
-  h+='</section>';
   h+=`<section class="card"><h2>Anteckning</h2><p class="muted small">Kopiera och klistra in i valfri anteckningsapp.</p>
     <textarea class="note" id="note" readonly>${esc(noteText(c))}</textarea>
     <div class="row" style="margin-top:.5rem"><button class="btn primary" data-act="copy">Kopiera anteckningen</button><button class="btn" data-act="unticks">Nollställ bockar</button></div></section>`;
@@ -885,12 +1101,18 @@ function recipeRow(r){
   return `<article class="meal"><div class="meal-head"><h3>${esc(r.name)}</h3><span class="days">${r.meals.map(m=>MNAME[m]).join(', ')}</span></div>
    <p class="small muted">${r.min} min, ${r.lf?'laktosfri':'innehåller laktos'}, per standardportion ${n0(st.k)} kcal, protein ${n0(st.p)} g, kolhydrater ${n0(st.c)} g, fett ${n0(st.f)} g</p>
    <p class="small">${r.ing.map(i=>esc(PRODUCTS[i[0]].name.split(',')[0].toLowerCase())).filter((v,i,a)=>a.indexOf(v)===i).join(', ')}</p>
-   ${srcLine(r)}${(r.extra&&r.extra.length)?`<p class="small muted">${r.extra.length} ingredienser läggs på listan utan pris.</p>`:''}
+   ${srcLine(r)}${stepsBlock(r)}${(r.extra&&r.extra.length)?`<p class="small muted">${r.extra.length} ingredienser läggs på listan utan pris.</p>`:''}
    <div class="tools">${stars(r.id)}${(!r.api&&r.link)?`<a href="${esc(r.link)}" target="_blank" rel="noopener noreferrer">Originalrecept</a>`:''}${r.custom?`<button class="btn sm danger" data-act="delrecipe" data-rid="${r.id}">Ta bort</button>`:''}</div></article>`;
 }
 function viewRecipes(){
   const popts=Object.values(PRODUCTS).map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
-  let h=`<section class="card"><h2>Hitta recept</h2>
+  const ng=RECIPES.filter(r=>r.gen).length;
+  let h=`<section class="card"><h2>Recept från veckans kampanjer</h2>
+   <p>${state.gen?`Appen har satt ihop <strong>${ng} recept</strong> av veckans kampanjvaror, till exempel wok, curry, pasta och tacos. De syns som Kampanjrecept i listorna nedan och kan väljas i veckoplanen.`:'Kampanjrecept är avstängda. Slå på dem under Inställningar.'}</p>
+   <p class="muted small">Vill du hellre ha riktiga recept? Appen kan leta upp recept på ReceptAPI för de proteinvaror som har störst rabatt. Det kostar upp till 12 av dina dagliga anrop.</p>
+   <div class="row"><button class="btn primary" data-act="hunt">Föreslå riktiga recept</button></div>
+   <div id="huntres" style="margin-top:.6rem"></div></section>
+   <section class="card"><h2>Hitta recept</h2>
    <p class="muted small">Söker i svenska recept via ReceptAPI. Ingredienserna kopplas till varor i appen, och mängderna skalas sedan mot dina mål. <a href="https://receptapi.se" target="_blank" rel="noopener noreferrer">Data från ReceptAPI – receptapi.se</a></p>
    <div class="fields"><div class="field"><label for="fq">Sökord</label><input type="text" id="fq" value="${esc(FIND.q)}" placeholder="Till exempel kyckling, linser eller lax"></div>
    <div class="field"><label for="fc">Kategori</label><select id="fc"><option value="">Alla</option>${[['huvudratt','Huvudrätt'],['frukost','Frukost'],['soppa','Soppa'],['sallad','Sallad'],['vegetariskt','Vegetariskt']].map(c=>`<option value="${c[0]}"${sel(c[0],FIND.cat)}>${c[1]}</option>`).join('')}</select></div></div>
@@ -912,30 +1134,51 @@ function viewRecipes(){
   });
   return h;
 }
+const OFILTER={q:'',store:'',only:false};
 function viewOffers(){
-  const off=getOffers(),u=untilText();
   const popts=Object.values(PRODUCTS).map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
-  let h=`<section class="card"><h2>Erbjudanden i Hässleholm</h2>${offerStatus()}</section>`;
-  h+=`<section class="card"><h2>Lägg till kampanj</h2><div class="fields">
-   <div class="field"><label for="os">Butik</label><select id="os">${STORES.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}</select></div>
+  const list=allOffers().filter(o=>!isExpired(o));
+  const nPick=Object.keys(state.picked).filter(k=>state.picked[k]).length;
+  let h=`<section class="card"><h2>Erbjudanden i Hässleholm</h2>${offerStatus()}
+   <p class="muted small">Kryssa i det du vill ha. Valda varor hamnar på inköpslistan och väger tungt när appen väljer recept. ${nPick} valda just nu.</p>
+   <div class="fields">
+    <div class="field"><label for="of">Sök</label><input type="text" id="of" value="${esc(OFILTER.q)}" data-act="ofilter" placeholder="Till exempel kyckling"></div>
+    <div class="field"><label for="os2">Butik</label><select id="os2" data-act="ostore"><option value="">Alla</option>${STORES.map(x=>`<option value="${x.id}"${sel(x.id,OFILTER.store)}>${x.name}</option>`).join('')}</select></div>
+   </div>
+   <label class="check"><input type="checkbox" data-act="oonly"${chk(OFILTER.only)}><span>Visa bara varor appen känner igen</span></label>
+   ${nPick?`<div class="row"><button class="btn sm" data-act="clearpicks">Rensa mina val</button></div>`:''}</section>`;
+  const q=OFILTER.q.trim().toLowerCase();
+  STORES.forEach(st=>{
+    if(OFILTER.store&&OFILTER.store!==st.id)return;
+    let os=list.filter(o=>o.store===st.id);
+    if(q)os=os.filter(o=>(o.heading+' '+(o.pid?PRODUCTS[o.pid].name:'')).toLowerCase().includes(q));
+    if(OFILTER.only)os=os.filter(o=>o.pid);
+    h+=`<h3 style="margin:1.2rem 0 .4rem">${esc(st.name)} <span class="muted" style="font-weight:400;font-size:.9rem">${os.length} erbjudanden</span></h3>`;
+    if(!os.length){h+='<p class="muted small">Inga erbjudanden att visa.</p>';return}
+    os.sort((a,b)=>(b.pid?1:0)-(a.pid?1:0)||String(a.heading||'').localeCompare(String(b.heading||''),'sv'));
+    h+='<div class="card" style="padding:.3rem .8rem">';
+    os.forEach(o=>{
+      const on=!!state.picked[o.id];
+      const bits=[offerWhat(o),packNote(o)?'Förpackning '+packNote(o):'',regNote(o),offerSave(o),
+        o.until?'Gäller t.o.m. '+new Date(o.until).toLocaleDateString('sv-SE',{weekday:'short',day:'numeric',month:'short'}):''].filter(Boolean);
+      h+=`<div class="line${on?'':''}"><input type="checkbox" data-act="pick" data-id="${esc(o.id)}"${chk(on)} aria-label="Välj ${esc(o.heading)}">
+        <div class="nm">${esc(o.heading)}${o.pid?` <span class="muted">(${esc(PRODUCTS[o.pid].name)})</span>`:''}<small>${esc(bits.join('. '))}</small></div>
+        <div class="pr"><span class="tag">${esc(offerLabel(o))}</span>${o.id&&String(o.id).charAt(0)==='u'?`<button class="btn sm danger" data-act="deloffer" data-id="${esc(o.id)}">Ta bort</button>`:''}</div></div>`;
+    });
+    h+='</div>';
+  });
+  h+=`<section class="card" style="margin-top:1.2rem"><h2>Lägg till kampanj själv</h2><div class="fields">
+   <div class="field"><label for="os">Butik</label><select id="os">${STORES.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></div>
    <div class="field"><label for="op">Vara</label><select id="op">${popts}</select></div>
    <div class="field"><label for="ok">Typ</label><select id="ok"><option value="price">Fast kampanjpris</option><option value="multi">Flerköp, till exempel 3 för 2</option></select></div>
    <div class="field"><label for="opr">Pris per förpackning (kr)</label><input type="number" id="opr" min="1" step="0.5"></div>
    <div class="field"><label for="ob">Köp (antal)</label><input type="number" id="ob" value="3" min="2"></div>
    <div class="field"><label for="oy">Betala för (antal)</label><input type="number" id="oy" value="2" min="1"></div>
-   <div class="field"><label for="om">Max per kund (0 = obegränsat)</label><input type="number" id="om" value="0" min="0"></div></div>
-   <div class="row"><button class="btn primary" data-act="addoffer">Lägg till</button><button class="btn danger" data-act="resetoffers">Återställ till automatiska erbjudanden</button></div></section>`;
-  STORES.forEach(s=>{
-    const os=off.filter(o=>o.store===s.id);
-    h+=`<h3 style="margin:1rem 0 .4rem">${s.name}</h3>`;
-    if(!os.length){h+='<p class="muted small">Inga kampanjer inlagda.</p>';return}
-    h+='<div class="card" style="padding:.4rem .8rem">';
-    os.forEach(o=>{
-      const p=PRODUCTS[o.pid];const reg=priceOf(o.pid,o.store);
-      h+=`<div class="line" style="grid-template-columns:1fr auto auto"><div class="nm">${esc(p?p.name:o.pid)}<small>Ordinarie ca ${reg!=null?kr(reg):'okänt'}, gäller t.o.m. ${esc(o.until?new Date(o.until).toLocaleDateString('sv-SE',{weekday:'short',day:'numeric',month:'short'}):u)}${o.heading?', '+esc(o.heading):''}</small></div><span class="tag">${esc(offerLabel(o))}</span><button class="btn sm danger" data-act="deloffer" data-id="${o.id}">Ta bort</button></div>`;
-    });
-    h+='</div>';
-  });
+   <div class="field"><label for="om">Max per kund</label><input type="number" id="om" value="0" min="0"></div>
+   <div class="field"><label for="oreg">Ordinarie pris (kr)</label><input type="number" id="oreg" min="1" step="0.5" placeholder="Valfritt"></div>
+   <div class="field"><label for="opg">Förpackning (g eller ml)</label><input type="number" id="opg" min="20" placeholder="Valfritt"></div></div>
+   <p class="muted small">Ordinarie pris och förpackning är frivilliga. Utan dem uppskattar appen värdet, och erbjudandet används inte när kampanjrecepten sätts ihop.</p>
+   <div class="row"><button class="btn primary" data-act="addoffer">Lägg till</button><button class="btn danger" data-act="resetoffers">Återställ till hämtade erbjudanden</button></div></section>`;
   return h;
 }
 function offerStatus(){
@@ -953,7 +1196,7 @@ function loadLive(){
   try{
     fetch('offers.json',{cache:'no-cache'}).then(r=>r.ok?r.json():Promise.reject()).then(j=>{
       if(j&&Array.isArray(j.offers)&&j.offers.length){
-        LIVE=j;if(!state.offers)regenerate(0,true);render();toast('Erbjudanden uppdaterade');
+        LIVE=j;rebuildRecipes();if(!state.offers)regenerate(0,true);render();toast('Erbjudanden uppdaterade');
       }
     }).catch(()=>{});
   }catch(e){}
@@ -995,6 +1238,7 @@ function viewSettings(){
     <option value="1.2"${sel(1.2,state.protein)}>Normalt, 1,2 g/kg</option><option value="1.6"${sel(1.6,state.protein)}>Högt, 1,6 g/kg</option><option value="2"${sel(2,state.protein)}>Mycket högt, 2,0 g/kg</option></select></div>
     <p class="muted small">Varje rätt justeras per person: proteindelen och kolhydratdelen skalas var för sig så att både kalorier och protein närmar sig målet.</p>
     <label class="check"><input type="checkbox" data-act="lf"${chk(state.lf)}><span>Föredra laktosfria rätter</span></label>
+    <label class="check"><input type="checkbox" data-act="gen"${chk(state.gen)}><span>Skapa recept av veckans kampanjer automatiskt (wok, curry, pasta, tacos och fler)</span></label>
     <label class="check"><input type="checkbox" data-act="stock"${chk(state.stock)}><span>Köp extra av långhållbara kampanjvaror (fryst och torrvaror) när priset är minst 20 % lägre. Extravarorna visas som förråd.</span></label></section>`;
   h+=`<section class="card"><h2>Måltider</h2><p class="muted small">Välj vilka måltider som ska planeras, hur många dagar och hur många olika recept.</p>`;
   MEALS.forEach(m=>{
@@ -1026,9 +1270,55 @@ function render(){
   else if(tab==='history')h=viewHistory();
   else h=viewSettings();
   $('#view').innerHTML=h;
-  if(tab==='recipes'){addIngRow();renderFind()}
+  if(tab==='recipes'){addIngRow();renderFind();renderHunt()}
 }
 const FIND={q:'',cat:'',items:[],total:0,offset:0,msg:'',remaining:null};
+const HUNT={items:[],msg:''};
+const QWORD={kyckling:'kyckling',notfars:'nötfärs',blandfars:'blandfärs',kalkonfars:'kalkonfärs',flaskfile:'fläskfilé',lax:'lax',torsk:'torsk',rakor:'räkor',tofu:'tofu',kikartor:'kikärtor',bonor:'svarta bönor',linser:'linser',agg:'ägg'};
+function topOfferProteins(){
+  const off=offerIndex(),best={};
+  Object.keys(off).forEach(k=>{
+    const o=off[k];if(!ROLE_P.has(o.pid)||!QWORD[o.pid]||!state.stores[o.store])return;
+    if(!(o.reg>0||(!state.offers&&!LIVE)))return;
+    const frac=1-offerEff(o)/regPerPack(o);
+    if(!best[o.pid]||frac>best[o.pid].frac)best[o.pid]={pid:o.pid,frac,store:o.store};
+  });
+  return Object.values(best).sort((a,b)=>b.frac-a.frac).slice(0,3);
+}
+function renderHunt(){
+  const box=$('#huntres');if(!box)return;
+  let h=HUNT.msg?`<p class="muted small">${esc(HUNT.msg)}</p>`:'';
+  HUNT.items.forEach((it,i)=>{
+    h+=`<div class="line" style="grid-template-columns:1fr auto"><div class="nm"><b>${esc(it.recipe.name)}</b>
+      <small>Ca ${n0(it.cost)} kr per portion, ${n0(it.save*100)} % av ingredienskostnaden är kampanj. Hittad via kampanjen på ${esc((PNOUN[it.pid]||'').toLowerCase())} hos ${esc(SNAME[it.store]||'')}. Källa: ${esc(it.recipe.src||'okänd')}. ${it.info.mapped} av ${it.info.total} ingredienser kopplade.</small></div>
+      <button class="btn sm primary" data-act="addhunt" data-i="${i}">Lägg till</button></div>`;
+  });
+  if(HUNT.items.length)h+=`<p class="small muted"><a href="https://receptapi.se" target="_blank" rel="noopener noreferrer">Data från ReceptAPI – receptapi.se</a></p>`;
+  box.innerHTML=h;
+}
+async function huntRecipes(){
+  const tops=topOfferProteins();
+  if(!tops.length){HUNT.msg='Hittade inga proteinvaror på kampanj just nu.';renderHunt();return}
+  HUNT.items=[];HUNT.msg='Letar recept, det kan ta en liten stund...';renderHunt();
+  const off=offerIndex();
+  try{
+    for(const t of tops){
+      const j=await apiGet('/recipes?'+new URLSearchParams({q:QWORD[t.pid],category:'huvudratt',limit:'10'}).toString());
+      const cands=(j.data||[]).filter(it=>!state.custom.some(c=>c.id==='a-'+it.slug)&&!HUNT.items.some(h=>h.recipe.id==='a-'+it.slug)).slice(0,3);
+      for(const it of cands){
+        const d=await apiGet('/recipes/'+encodeURIComponent(it.slug));
+        const r=mapApiRecipe(d.data,'middag');
+        if(!r.ok)continue;
+        const ci=costInfo(r.recipe,allowedIds(),off);
+        HUNT.items.push({recipe:r.recipe,info:r.info,save:ci.reg>0?ci.save/ci.reg:0,cost:ci.eff,pid:t.pid,store:t.store});
+      }
+    }
+    HUNT.items.sort((a,b)=>b.save-a.save);
+    HUNT.msg=(HUNT.items.length?`Hittade ${HUNT.items.length} recept, sorterade på hur mycket av ingredienserna som är på kampanj.`:'Inget av recepten gick att koppla till appens varor. Sök själv eller försök igen i morgon.')+(FIND.remaining!=null?` Anrop kvar idag: ${FIND.remaining}.`:'');
+  }catch(e){HUNT.msg=e.message}
+  renderHunt();
+}
+
 async function apiGet(path){
   const headers={Accept:'application/json'};if(state.rkey)headers['x-api-key']=state.rkey;
   let res;
@@ -1125,6 +1415,7 @@ document.addEventListener('click',e=>{
   }
   else if(act==='unticks'){state.ticked={};save();render()}
   else if(act==='pantryclear'){state.pantry={};save();render()}
+  else if(act==='clearpicks'){state.picked={};save();rebuildRecipes();changed(0,true)}
   else if(act==='addperson'){state.persons.push({name:'Person '+(state.persons.length+1),sex:'f',age:30,height:170,weight:70,act:1.375,goal:'maintain'});save();changed(0,true)}
   else if(act==='delperson'){state.persons.splice(+t.dataset.i,1);save();changed(0,true)}
   else if(act==='resetall'){
@@ -1133,6 +1424,8 @@ document.addEventListener('click',e=>{
       state=loadState();state.pantry={};rebuildRecipes();regenerate(0,false);tab='plan';render();
     }
   }
+  else if(act==='hunt')huntRecipes();
+  else if(act==='addhunt'){const i=+t.dataset.i,it=HUNT.items[i];if(it){state.custom.push(it.recipe);HUNT.items.splice(i,1);save();rebuildRecipes();render();toast('Receptet är tillagt')}}
   else if(act==='find')doFind(false);
   else if(act==='findmore')doFind(true);
   else if(act==='addapi'){const row=t.closest('.line');addApi(t.dataset.slug,row.querySelector('.msel').value)}
@@ -1154,21 +1447,22 @@ document.addEventListener('click',e=>{
   }
   else if(act==='addoffer'){
     const price=+$('#opr').value;if(!(price>0)){toast('Ange ett pris');return}
-    const o={id:'u'+Date.now(),store:$('#os').value,pid:$('#op').value,kind:$('#ok').value,price,buy:+$('#ob').value||3,pay:+$('#oy').value||2,max:+$('#om').value||0};
+    const o={id:'u'+Date.now(),store:$('#os').value,pid:$('#op').value,kind:$('#ok').value,price,buy:+$('#ob').value||3,pay:+$('#oy').value||2,max:+$('#om').value||0,reg:+$('#oreg').value||0,regSrc:'',packG:+$('#opg').value||0,qty:'',heading:(PRODUCTS[$('#op').value]||{}).name+' (inlagd av dig)',until:''};
     if(o.kind==='multi'&&o.pay>=o.buy){toast('Betala-antalet måste vara lägre än köp-antalet');return}
     if(!state.offers)state.offers=clone(getOffers());
-    state.offers.push(o);save();changed(0,false);toast('Kampanjen är inlagd');
+    state.offers.push(o);save();rebuildRecipes();changed(0,false);toast('Kampanjen är inlagd');
   }
   else if(act==='deloffer'){
     if(!state.offers)state.offers=clone(getOffers());
-    state.offers=state.offers.filter(o=>o.id!==t.dataset.id);save();changed(0,false);
+    state.offers=state.offers.filter(o=>o.id!==t.dataset.id);save();rebuildRecipes();changed(0,false);
   }
-  else if(act==='resetoffers'){state.offers=null;save();changed(0,false)}
+  else if(act==='resetoffers'){state.offers=null;save();rebuildRecipes();changed(0,false)}
 });
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='fq'){e.preventDefault();doFind(false)}});
 document.addEventListener('input',e=>{
   const t=e.target;
   if(t.dataset.act==='w'){const o=$('#o-'+t.dataset.k);if(o)o.textContent=t.value}
+  if(t.dataset.act==='ofilter'){OFILTER.q=t.value;clearTimeout(window.__oft);window.__oft=setTimeout(()=>{if(tab==='offers'){render();const el=$('#of');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}}},350)}
   if(t.dataset.act==='pfilter'){
     const q=t.value.trim().toLowerCase();
     $$('.pitem').forEach(el=>{el.hidden=q&&el.dataset.name.indexOf(q)<0});
@@ -1179,6 +1473,9 @@ document.addEventListener('change',e=>{
   if(act==='w'){state.w[t.dataset.k]=+t.value;state.seed++;regenerate(.05,false);render()}
   else if(act==='setrecipe'){state.plan[t.dataset.m][+t.dataset.i]={rid:t.value,locked:true};save();render()}
   else if(act==='tick'){state.ticked[t.dataset.pid]=t.checked;save();render()}
+  else if(act==='pick'){state.picked[t.dataset.id]=t.checked;if(!t.checked)delete state.picked[t.dataset.id];save();rebuildRecipes();regenerate(0,true);render()}
+  else if(act==='ostore'){OFILTER.store=t.value;render()}
+  else if(act==='oonly'){OFILTER.only=t.checked;render()}
   else if(act==='pantry'){state.pantry[t.dataset.pid]=t.checked;save();t.closest('.pitem').classList.toggle('on',t.checked);
     const n=Object.keys(state.pantry).filter(k=>state.pantry[k]).length;const p=$('#view .card p.muted');if(p)p.textContent='Bocka för det du har hemma så tas det bort från inköpslistan. '+n+' varor markerade.'}
   else if(act==='person'){
@@ -1190,12 +1487,13 @@ document.addEventListener('change',e=>{
   }
   else if(act==='protein'){state.protein=+t.value;save();changed(0,true)}
   else if(act==='rkey'){state.rkey=t.value.trim();save();toast(state.rkey?'Nyckeln är sparad':'Nyckeln är borttagen')}
+  else if(act==='gen'){state.gen=t.checked;save();rebuildRecipes();changed(0,true)}
   else if(act==='lf'){state.lf=t.checked;save();render()}
   else if(act==='stock'){state.stock=t.checked;save();render()}
   else if(act==='mealon'){state.meals[t.dataset.m].on=t.checked;save();changed(0,true)}
   else if(act==='mealdays'){const c=state.meals[t.dataset.m];c.days=clamp(Math.round(+t.value)||1,1,7);c.uniq=Math.min(c.uniq,c.days);save();changed(0,true)}
   else if(act==='mealuniq'){const c=state.meals[t.dataset.m];c.uniq=clamp(Math.round(+t.value)||1,1,Math.min(7,c.days));save();changed(0,true)}
-  else if(act==='storeallow'){state.stores[t.dataset.s]=t.checked;if(!STORES.some(s=>state.stores[s.id])){state.stores[t.dataset.s]=true;toast('Minst en butik måste vara vald')}state.chosen=null;save();changed(0,true)}
+  else if(act==='storeallow'){state.stores[t.dataset.s]=t.checked;if(!STORES.some(s=>state.stores[s.id])){state.stores[t.dataset.s]=true;toast('Minst en butik måste vara vald')}state.chosen=null;save();rebuildRecipes();changed(0,true)}
 });
 
 /* ================= start ================= */
