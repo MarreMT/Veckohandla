@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <title>Veckohandla</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -159,7 +161,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:.8rem 0}
 <script>
 (function(){
 'use strict';
-const BUILD='2026-10-28d';
+const BUILD='2026-10-28f';
 
 /* ================= hjälpfunktioner ================= */
 const $=(s,r)=>(r||document).querySelector(s);
@@ -419,7 +421,31 @@ const IMAP=[
  IM('jordnot',/jordnötssmör/,null,100,0),
  IM('notter',/mandel|mandlar|cashew|valnöt|hasselnöt|pinjenöt|jordnöt|nötter/,/mjölk|smör|mjöl|olja|dryck|massa/,60,0),
  IM('mjol',/vetemjöl|rågmjöl|dinkelmjöl|^mjöl$/,null,60,0),
- IM('socker',/socker/,/florsocker|farinsocker|vanilj|brunt/,85,0)
+ IM('socker',/socker/,/florsocker|farinsocker|vanilj|brunt/,85,0),
+ IM('kyckling',/kyckling/,/färs|buljong|fond|korv|lever/,100,150),
+ IM('flaskfile',/fläskkarré|fläskytterfilé|fläskkotlett|griskött|karré/,/rökt/,100,150),
+ IM('notfars',/köttfärs|oxfärs/,/vegetarisk|växt|soja/,100,0),
+ IM('lax',/lax/,/rökt|gravad|rom/,100,130),
+ IM('torsk',/fiskfil[eé]|vitfisk|sejfil[eé]|hoki|alaska/,/panerad/,100,130),
+ IM('rakor',/scampi|tigerräkor|skaldjur/,null,100,0),
+ IM('gradde',/cr[eè]me fraiche|gräddfil|matyoghurt|turkisk yoghurt/,null,100,0),
+ IM('ost',/fetaost|halloumi|getost|mozzarella/,null,60,0),
+ IM('lok',/purjolök|schalottenlök|rödlök|silverlök/,/pulver/,100,110),
+ IM('paprika',/spetspaprika|chilifrukt|röd chili/,/pulver|flakes/,100,160),
+ IM('wok',/sockerärt|haricot|gröna bönor|bönblandning|grönsaksblandning|blandade grönsaker/,null,100,0),
+ IM('broccoli',/blomkål|brysselkål|grönkål/,null,100,0),
+ IM('spenat',/ruccola|babyspenat|salladsmix|sallad(sblad)?\b/,/pasta|potatis|räk/,25,0),
+ IM('morot',/palsternacka|rotselleri|kålrot|rotfrukt/,null,100,80),
+ IM('potatis',/mandelpotatis|färskpotatis|delikatesspotatis/,null,100,90),
+ IM('tomat',/soltorkade tomater|cocktailtomat/,null,100,100),
+ IM('ris',/råris|basmati|fullkornsris/,null,85,0),
+ IM('couscous',/bulgur|quinoa|matvete|pärlcouscous/,null,80,0),
+ IM('krossad',/tomatsås|pastasås|marinarasås/,null,100,0),
+ IM('kokos',/kokosgrädde|cocosmjölk/,null,100,0),
+ IM('curry',/currypulver|garam masala|tikka|masala/,null,100,0),
+ IM('olja',/smör- och rapsolja|flytande margarin|sesamolja/,null,90,0),
+ IM('bar',/frysta bär|bärmix/,null,55,0),
+ IM('notter',/solrosfrön|pumpafrön|sesamfrön|chiafrön/,null,60,0)
 ];
 const SPICE=/salt|peppar|vatten|krydd|oregano|timjan|basilika|persilja|dill|koriander|kanel|kardemumma|ingefära|chili|spiskummin|lagerblad|rosmarin|salvia|muskot|paprikapulver|buljong|fond|vinäger|senap|ketchup|socker/;
 function toGrams(amount,unit,m){
@@ -451,16 +477,20 @@ function mapApiRecipe(d,meal){
   });
   const ing=Object.keys(agg).map(pid=>[pid,Math.round(agg[pid]/sv*10)/10,roleOf(pid)]).filter(i=>i[1]>=3);
   const total=nMap+extra.length;
-  const info={mapped:nMap,total,unmapped:extra.map(e=>e.name)};
-  if(nMap<2||nMap/Math.max(1,total)<.5||mapG/Math.max(1,mapG+xG)<.65)
-    return {ok:false,info,reason:`Bara ${nMap} av ${total} ingredienser kunde kopplas till varor i appen, så näringsvärdena skulle bli för osäkra.`};
-  let k=0,pg=0;ing.forEach(([pid,g,role])=>{k+=PRODUCTS[pid].k*g/100;if(role==='P')pg+=g});
-  const lo=meal==='frukost'||meal==='mellanmal'?90:230,hi=meal==='frukost'||meal==='mellanmal'?900:1300;
-  if(k<lo||k>hi)return {ok:false,info,reason:`Portionen blir ${n0(k)} kcal av de ingredienser som kunde kopplas, vilket ser fel ut för ${MNAME[meal].toLowerCase()}.`};
-  if(pg<40&&meal!=='frukost'&&meal!=='mellanmal')return {ok:false,info,reason:'Receptet saknar en tydlig proteinkälla bland ingredienserna som kunde kopplas.'};
+  const frac=nMap/Math.max(1,total), gfrac=mapG/Math.max(1,mapG+xG);
+  const info={mapped:nMap,total,frac,gfrac,unmapped:extra.map(e=>e.name)};
+  if(!ing.length)return {ok:false,info,reason:'Ingen av ingredienserna finns i appens varulista.'};
+  const hasP=ing.some(i=>i[2]==='P');
+  if(!hasP)return {ok:false,info,reason:'Ingen proteinkälla kunde kopplas, så portionerna går inte att skala mot dina mål.'};
+  if(nMap<2)return {ok:false,info,reason:`Bara ${nMap} av ${total} ingredienser kunde kopplas.`};
+  let k=0;ing.forEach(([pid,g])=>{k+=PRODUCTS[pid].k*g/100});
+  const snack=meal==='frukost'||meal==='mellanmal';
+  if(k<(snack?60:140))return {ok:false,info,reason:`De kopplade ingredienserna ger bara ${n0(k)} kcal per portion, vilket är för lite för att skala rätt.`};
+  const weak=frac<0.5||gfrac<0.6;
   const meals=meal==='middag'?['middag','lunch']:meal==='lunch'?['lunch','middag']:[meal];
   const url=d.source&&/^https?:\/\//.test(d.source.url||'')?d.source.url:(/^https?:\/\//.test(d.url||'')?d.url:'');
-  return {ok:true,info,recipe:{id:'a-'+d.slug,name:String(d.title||d.slug),meals,min:+d.total_minutes||30,lf:(d.allergens||[]).indexOf('mjolk')<0?1:0,link:url,src:(d.source&&d.source.name)||'',api:1,custom:true,ing,extra}};
+  info.weak=weak;
+  return {ok:true,info,weak,recipe:{id:'a-'+d.slug,name:String(d.title||d.slug),meals,min:+d.total_minutes||30,lf:(d.allergens||[]).indexOf('mjolk')<0?1:0,link:url,src:(d.source&&d.source.name)||'',api:1,custom:true,weak,ing,extra}};
 }
 function guessMeal(it){
   const t=((it.category||'')+' '+(it.tags||[]).join(' ')+' '+(it.title||'')).toLowerCase();
@@ -940,6 +970,10 @@ function stepsBlock(r){
   return (r.steps&&r.steps.length)?`<details class="ing"><summary>Så gör du</summary><ol style="margin:.3rem 0;padding-left:1.2rem">${r.steps.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></details>`:'';
 }
 function srcLine(r){
+  if(r.weak)return `<p class="small muted">⚠ En del ingredienser saknas i appens varulista, så näringsvärdena är ungefärliga.</p>`+srcLine2(r);
+  return srcLine2(r);
+}
+function srcLine2(r){
   if(r.gen)return `<p class="small muted"><span class="tag">Kampanjrecept</span> Skapat av appen utifrån veckans erbjudanden.</p>`;
   if(!r.api)return '';
   return `<p class="small muted">Recept från ${esc(r.src||'okänd källa')}${r.link?`, <a href="${esc(r.link)}" target="_blank" rel="noopener noreferrer">originalrecept</a>`:''}. <a href="https://receptapi.se" target="_blank" rel="noopener noreferrer">Data från ReceptAPI – receptapi.se</a></p>`;
@@ -1291,7 +1325,7 @@ function render(){
   if(tab==='recipes'){addIngRow();renderFind();renderHunt()}
 }
 const FIND={q:'',cat:'',items:[],total:0,offset:0,msg:'',remaining:null};
-const HUNT={items:[],msg:''};
+const HUNT={items:[],skipped:[],msg:''};
 const QWORD={kyckling:'kyckling',notfars:'nötfärs',blandfars:'blandfärs',kalkonfars:'kalkonfärs',flaskfile:'fläskfilé',lax:'lax',torsk:'torsk',rakor:'räkor',tofu:'tofu',kikartor:'kikärtor',bonor:'svarta bönor',linser:'linser',agg:'ägg'};
 function topOfferProteins(){
   const off=offerIndex(),best={};
@@ -1308,31 +1342,36 @@ function renderHunt(){
   let h=HUNT.msg?`<p class="muted small">${esc(HUNT.msg)}</p>`:'';
   HUNT.items.forEach((it,i)=>{
     h+=`<div class="line" style="grid-template-columns:1fr auto"><div class="nm"><b>${esc(it.recipe.name)}</b>
-      <small>Ca ${n0(it.cost)} kr per portion, ${n0(it.save*100)} % av ingredienskostnaden är kampanj. Hittad via kampanjen på ${esc((PNOUN[it.pid]||'').toLowerCase())} hos ${esc(SNAME[it.store]||'')}. Källa: ${esc(it.recipe.src||'okänd')}. ${it.info.mapped} av ${it.info.total} ingredienser kopplade.</small></div>
+      <small>${it.weak?'⚠ Bara '+it.info.mapped+' av '+it.info.total+' ingredienser kopplade, näringsvärdena blir ungefärliga. ':''}Ca ${n0(it.cost)} kr per portion, ${n0(it.save*100)} % av ingredienskostnaden är kampanj. Hittad via kampanjen på ${esc((PNOUN[it.pid]||'').toLowerCase())} hos ${esc(SNAME[it.store]||'')}. Källa: ${esc(it.recipe.src||'okänd')}. ${it.info.mapped} av ${it.info.total} ingredienser kopplade.</small></div>
       <button class="btn sm primary" data-act="addhunt" data-i="${i}">Lägg till</button></div>`;
   });
-  if(HUNT.items.length)h+=`<p class="small muted"><a href="https://receptapi.se" target="_blank" rel="noopener noreferrer">Data från ReceptAPI – receptapi.se</a></p>`;
+  if(HUNT.skipped.length){
+    h+=`<details class="ing" style="margin-top:.5rem"><summary>${HUNT.skipped.length} recept kunde inte användas</summary><ul style="margin:.3rem 0;padding-left:1.1rem" class="small">`+
+      HUNT.skipped.map(x=>`<li><b>${esc(x.name)}</b>: ${esc(x.reason)}${x.un.length?` Ej kopplade: ${esc(x.un.join(', '))}.`:''}</li>`).join('')+
+      `</ul><p class="small muted">Skicka gärna listan till Claude, så kan fler ingredienser läggas in i appens varulista.</p></details>`;
+  }
+  if(HUNT.items.length||HUNT.skipped.length)h+=`<p class="small muted"><a href="https://receptapi.se" target="_blank" rel="noopener noreferrer">Data från ReceptAPI – receptapi.se</a></p>`;
   box.innerHTML=h;
 }
 async function huntRecipes(){
   const tops=topOfferProteins();
   if(!tops.length){HUNT.msg='Hittade inga proteinvaror på kampanj just nu.';renderHunt();return}
-  HUNT.items=[];HUNT.msg='Letar recept, det kan ta en liten stund...';renderHunt();
+  HUNT.items=[];HUNT.skipped=[];HUNT.msg='Letar recept, det kan ta en liten stund...';renderHunt();
   const off=offerIndex();
   try{
     for(const t of tops){
-      const j=await apiGet('/recipes?'+new URLSearchParams({q:QWORD[t.pid],category:'huvudratt',limit:'10'}).toString());
-      const cands=(j.data||[]).filter(it=>!state.custom.some(c=>c.id==='a-'+it.slug)&&!HUNT.items.some(h=>h.recipe.id==='a-'+it.slug)).slice(0,3);
+      const j=await apiGet('/recipes?'+new URLSearchParams({q:QWORD[t.pid],limit:'10'}).toString());
+      const cands=(j.data||[]).filter(it=>!state.custom.some(c=>c.id==='a-'+it.slug)&&!HUNT.items.some(h=>h.recipe.id==='a-'+it.slug)&&!HUNT.skipped.some(x=>x.slug===it.slug)).slice(0,3);
       for(const it of cands){
         const d=await apiGet('/recipes/'+encodeURIComponent(it.slug));
         const r=mapApiRecipe(d.data,'middag');
-        if(!r.ok)continue;
+        if(!r.ok){if(!HUNT.skipped.some(x=>x.name===(it.title||it.slug)))HUNT.skipped.push({slug:it.slug,name:it.title||it.slug,reason:r.reason,un:r.info.unmapped.slice(0,5)});continue}
         const ci=costInfo(r.recipe,allowedIds(),off);
-        HUNT.items.push({recipe:r.recipe,info:r.info,save:ci.reg>0?ci.save/ci.reg:0,cost:ci.eff,pid:t.pid,store:t.store});
+        HUNT.items.push({recipe:r.recipe,info:r.info,weak:r.weak,save:ci.reg>0?ci.save/ci.reg:0,cost:ci.eff,pid:t.pid,store:t.store});
       }
     }
     HUNT.items.sort((a,b)=>b.save-a.save);
-    HUNT.msg=(HUNT.items.length?`Hittade ${HUNT.items.length} recept, sorterade på hur mycket av ingredienserna som är på kampanj.`:'Inget av recepten gick att koppla till appens varor. Sök själv eller försök igen i morgon.')+(FIND.remaining!=null?` Anrop kvar idag: ${FIND.remaining}.`:'');
+    HUNT.msg=(HUNT.items.length?`Hittade ${HUNT.items.length} recept, sorterade på hur mycket av ingredienserna som är på kampanj.`:'Inga recept kunde kopplas till appens varor den här gången.')+(FIND.remaining!=null?` Anrop kvar idag: ${FIND.remaining}.`:'');
   }catch(e){HUNT.msg=e.message}
   renderHunt();
 }
@@ -1384,10 +1423,10 @@ async function addApi(slug,meal){
   try{
     const j=await apiGet('/recipes/'+encodeURIComponent(slug));
     const r=mapApiRecipe(j.data,meal);
-    if(!r.ok){FIND.msg=r.reason+(r.info.unmapped.length?' Ej kopplade: '+r.info.unmapped.slice(0,6).join(', ')+'.':'');renderFind();return}
+    if(!r.ok){FIND.msg=r.reason+(r.info.unmapped.length?' Ej kopplade: '+r.info.unmapped.slice(0,8).join(', ')+'.':'');renderFind();return}
     if(state.custom.some(c=>c.id===r.recipe.id)){FIND.msg='Receptet finns redan bland dina recept.';renderFind();return}
     state.custom.push(r.recipe);save();rebuildRecipes();
-    const msg=`Lade till ${r.recipe.name}. ${r.info.mapped} av ${r.info.total} ingredienser kopplades${r.recipe.extra.length?`, ${r.recipe.extra.length} läggs på listan utan pris`:''}.`+(FIND.remaining!=null?` Anrop kvar idag: ${FIND.remaining}.`:'');
+    const msg=`Lade till ${r.recipe.name}. ${r.info.mapped} av ${r.info.total} ingredienser kopplades${r.recipe.extra.length?`, ${r.recipe.extra.length} läggs på listan utan pris`:''}.${r.weak?' Näringsvärdena blir ungefärliga eftersom en del ingredienser saknas i varulistan.':''}`+(FIND.remaining!=null?` Anrop kvar idag: ${FIND.remaining}.`:'');
     render();FIND.msg=msg;renderFind();toast('Receptet är tillagt');
   }catch(e){FIND.msg=e.message;renderFind()}
 }
