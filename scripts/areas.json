@@ -1,0 +1,7 @@
+{
+  "omraden": [
+    { "id": "hassleholm", "namn": "Hässleholm", "lat": 56.1589, "lng": 13.7661, "radie_km": 10 },
+    { "id": "hoganas", "namn": "Höganäs", "lat": 56.1996, "lng": 12.5577, "radie_km": 10 },
+    { "id": "helsingborg", "namn": "Helsingborg", "lat": 56.0465, "lng": 12.6945, "radie_km": 10 }
+  ]
+}
