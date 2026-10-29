@@ -1,0 +1,5 @@
+docs/offers.json
+docs/nutrition.json
+node_modules
+docs/offers-*.json
+docs/areas.json
